@@ -3,7 +3,7 @@ from ..services.github_services import handle_github_event
 
 router = APIRouter()
 
-@router.post("/webhook")
+@router.post("/")
 async def github_webhook(request: Request):
     payload = await request.json()
     event = request.headers.get("X-GitHub-Event")

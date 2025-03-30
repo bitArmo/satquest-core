@@ -1,9 +1,18 @@
 import logging
 import os
+import sys
 from logging.handlers import RotatingFileHandler
 
-# Create logs directory if it doesn't exist
-os.makedirs('logs', exist_ok=True)
+def get_log_path():
+    # Check if we're running tests
+    if 'pytest' in sys.modules:
+        log_dir = 'tests/logs'
+    else:
+        log_dir = 'logs'
+    
+    # Create logs directory if it doesn't exist
+    os.makedirs(log_dir, exist_ok=True)
+    return os.path.join(log_dir, 'app.log')
 
 # Configure logging
 def setup_logging():
@@ -15,8 +24,9 @@ def setup_logging():
     formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
     # Create and configure file handler
+    log_path = get_log_path()
     file_handler = RotatingFileHandler(
-        'logs/app.log',
+        log_path,
         maxBytes=10*1024*1024,  # 10MB
         backupCount=5
     )
@@ -27,6 +37,9 @@ def setup_logging():
     console_handler = logging.StreamHandler()
     console_handler.setLevel(logging.INFO)
     console_handler.setFormatter(formatter)
+
+    # Remove any existing handlers
+    logger.handlers.clear()
 
     # Add handlers to logger
     logger.addHandler(file_handler)
