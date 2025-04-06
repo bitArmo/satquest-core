@@ -10,3 +10,5 @@ def handle_github_event(event: str, payload: dict):
     logging.info(f"Payload: {github_event}")
     # Additional processing logic here
     return {"status": "Event processed successfully"}
+
+

@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Request
-from ...services.github_services import handle_github_event
+from app.services.github_services import handle_github_event
 
 router = APIRouter()
 
