@@ -27,5 +27,23 @@ async def github_login():
 @router.get("/callback")
 async def github_callback(code: str):
     # Exchange code for access token
-    # TODO: Implement token exchange
-    return {"status": "success", "code": code}
+        # Exchange code for token
+    token_response = requests.post(
+        "https://github.com/login/oauth/access_token",
+        headers={"Accept": "application/json"},
+        data={
+            "client_id": GITHUB_CLIENT_ID,
+            "client_secret": GITHUB_CLIENT_SECRET,
+            "code": code
+        }
+    )
+    access_token = token_response.json().get("access_token")
+
+    # Get actual GitHub username
+    user_info = requests.get(
+        "https://api.github.com/user",
+        headers={"Authorization": f"Bearer {access_token}"}
+    ).json()
+    github_username = user_info.get("login")
+
+    return {"status": "success", "Verification": github_username.lower()==pending_verifications["demo"].lower() , "github_username": github_username, "claimed_username": pending_verifications["demo"]}
