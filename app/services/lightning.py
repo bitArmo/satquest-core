@@ -1,10 +1,10 @@
-from breez_sdk_liquid import LiquidNetwork, default_config, ConnectRequest,  connect, BindingLiquidSdk, InputType, EventListener, SdkEvent, PrepareReceiveRequest, ReceiveAmount, PaymentMethod, PrepareReceiveResponse, ReceivePaymentRequest, PrepareSendRequest, PayAmount, PrepareSendResponse, SendPaymentRequest
+from breez_sdk_liquid import LiquidNetwork, default_config, ConnectRequest,  connect, BindingLiquidSdk, InputType, EventListener, SdkEvent, PrepareReceiveRequest, ReceiveAmount, PaymentMethod, PrepareReceiveResponse, ReceivePaymentRequest, PrepareSendRequest, PayAmount, PrepareSendResponse, SendPaymentRequest, PrepareLnUrlPayRequest, LnUrlPayRequest, PrepareLnUrlPayResponse
 from mnemonic import Mnemonic
 import os
 from os.path import exists
 import logging
 import time
-from typing import Union
+from typing import Union, Optional
 
 API_KEY = os.getenv("BREEZ_API_KEY")
 
@@ -46,10 +46,19 @@ class SdkListener(EventListener):
 class LightningService:
     def __init__(self):
         self.API_KEY = API_KEY
+        if not self.API_KEY:
+            raise ValueError("BREEZ_API_KEY environment variable is not set")
+            
         self.mnemonic = self.read_mnemonic()
         self.sdk = self.initialize_connection(self.API_KEY, self.mnemonic)
+        if not self.sdk:
+            raise RuntimeError("Failed to initialize Breez SDK")
+            
         self.listener = SdkListener()
-        self.sdk.add_event_listener(self.listener)
+        try:
+            self.sdk.add_event_listener(self.listener)
+        except Exception as e:
+            raise RuntimeError(f"Failed to add event listener: {e}")
 
     def initialize_connection(self, API_KEY, mnemonic):
         config = default_config(network = LiquidNetwork.MAINNET, breez_api_key = API_KEY)
@@ -61,7 +70,7 @@ class LightningService:
             print("Connected to the network")
             return sdk
         except Exception as e:
-            print(f"Error connecting to the network: {e}")
+            logging.error(f"Error connecting to the network: {e}")
             return None
         
     def is_paid(self, destination: str):
@@ -122,13 +131,13 @@ class LightningService:
             logging.error(f"Error getting lightning limits: {e}")
             return None
     
-    def prepare_receive_payment(self, amount): # amount in satoshis
+    # RECEIVE PAYMENT METHODS
+    def prepare_receive_lightning_payment(self, amount: Optional[int] = None): # amount in satoshis
         try:
             current_limit = self.sdk.fetch_lightning_limits()
-            print(current_limit)
             if not current_limit.receive.min_sat <= amount <= current_limit.receive.max_sat:
-                raise Exception("Amount is out of range")
-            optional_amount = ReceiveAmount.BITCOIN(amount)
+                raise Exception("Amount is out of limit range")
+            optional_amount = ReceiveAmount.BITCOIN(amount) if amount else None
             prepare_request = PrepareReceiveRequest(payment_method = PaymentMethod.LIGHTNING, amount = optional_amount)
             prepare_response = self.sdk.prepare_receive_payment(prepare_request)
             return prepare_response
@@ -151,15 +160,41 @@ class LightningService:
             logging.error(error)
             raise
         
+    # SEND PAYMENT METHODS
     def prepare_send_payment(self, destination: str, amount: PayAmount = PayAmount.DRAIN):
         try:
+            if amount != PayAmount.DRAIN:
+                amount = PayAmount.BITCOIN(amount)
             prepare_request = PrepareSendRequest(destination=destination, amount = amount)
             prepare_response = self.sdk.prepare_send_payment(prepare_request)
             return prepare_response
         except Exception as e:
             logging.error(f"Error preparing send payment: {e}")
             raise
-
+    def prepare_lnurl_pay(self, destination: str):
+        try:
+            parsed_input = self.sdk.parse(destination)
+            if isinstance(parsed_input, InputType.LN_URL_PAY):
+                amount = PayAmount.BITCOIN(1800)
+                optional_comment = "<comment>"
+                optional_validate_success_action_url = True
+                req = PrepareLnUrlPayRequest(data = parsed_input.data, amount = amount, bip353_address = parsed_input.bip353_address, comment = optional_comment, validate_success_action_url = optional_validate_success_action_url)
+                prepare_response = self.sdk.prepare_lnurl_pay(req)
+                return prepare_response
+            else:
+                raise Exception("Invalid destination")
+        except Exception as error:
+            logging.error(error)
+            raise
+    def send_lnurl_pay(self, prepare_response: PrepareLnUrlPayResponse):
+        try:
+            req = LnUrlPayRequest(prepare_response=prepare_response)
+            res = self.sdk.lnurl_pay(req)
+            return res
+        except Exception as error:
+            logging.error(error)
+            raise
+        
     def send_payment(self, prepare_response: PrepareSendResponse):
         try:
             req = SendPaymentRequest(prepare_response=prepare_response)
@@ -190,3 +225,11 @@ class LightningService:
             if self.is_synced():
                 break
             time.sleep(1)
+
+if __name__ == "__main__":
+    lightning_service = LightningService()
+    print(lightning_service.get_node_info())
+    req = lightning_service.prepare_lnurl_pay(destination="mo_harchegani@sats.mobi")
+    print(req)
+    res = lightning_service.send_lnurl_pay(req)
+    print(res)
