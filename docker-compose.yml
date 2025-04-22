@@ -12,4 +12,7 @@ services:
       - GITHUB_CLIENT_ID=${GITHUB_CLIENT_ID}
       - GITHUB_CLIENT_SECRET=${GITHUB_CLIENT_SECRET}
       - GITHUB_REDIRECT_URI=${GITHUB_REDIRECT_URI}
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_KEY=${SUPABASE_KEY}      
+      - BREEZ_SDK_LIQUID_KEY=${BREEZ_SDK_LIQUID_KEY}
     command: poetry run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
